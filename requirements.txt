@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+python-jose[cryptography]
+sqlalchemy
+passlib
+python-multipart
+psycopg2
+alembic
+aiofiles
+jinja2

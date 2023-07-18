@@ -9,7 +9,6 @@ from starlette.staticfiles import StaticFiles
 from routers.auth import auth, auth_fe, admin, address, users
 from routers.todos import todos, todos_fe
 
-# from routers.auth import get_current_user
 
 app = FastAPI()
 

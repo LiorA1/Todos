@@ -1,19 +1,17 @@
 import sys
+import logging
 
 from fastapi import Depends, status, APIRouter, Request, Response, Form
-from pydantic import BaseModel
 from typing import Optional
 import models
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
-from sqlalchemy.exc import IntegrityError
 from database import engine, SessionLocal
-from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
-from datetime import datetime, timedelta
+from fastapi.security import OAuth2PasswordBearer
+from datetime import timedelta
 from jose import jwt, JWTError
 
-from .auth import get_login_token, authenticate_user, create_access_token, get_password_hash
-from .validators import CreateUser
+from .auth import authenticate_user, create_access_token, get_password_hash
 
 from starlette.responses import RedirectResponse
 
@@ -23,6 +21,9 @@ from fastapi.templating import Jinja2Templates
 templates = Jinja2Templates(directory="templates")
 
 sys.path.append("..")
+
+logging.basicConfig(level=logging.DEBUG)
+logger = logging.getLogger(__name__)
 
 
 SECRET_KEY = "dsfurgbnmc,943u09u4gmrngviuy4"
@@ -46,7 +47,7 @@ class LoginForm:
 
     async def create_oauth_form(self):
         form = await self.request.form()
-        self.username = form.get("email")
+        self.username = form.get("email")  # The name is sent from the FE form, utilizing the 'email' attribute.
         self.password = form.get("password")
 
 
@@ -70,17 +71,20 @@ async def login_page_post(request: Request, db: Session = Depends(get_db)):
     try:
         form = LoginForm(request)
         await form.create_oauth_form()
-        response = RedirectResponse(url="/todos_fe", status_code=status.HTTP_302_FOUND)
+        response = RedirectResponse(url="/todos_fe/", status_code=status.HTTP_302_FOUND)
 
         user = authenticate_user(form.username, form.password, db=db)
         if not user:
-            msg = "Incorrect User or password"
+            msg = "Incorrect Username or password"
             return templates.TemplateResponse("login.html", {"request": request, "msg": msg})
         token_expires = timedelta(minutes=60)
         token = create_access_token(user.username, user.id, user.role, expires_delta=token_expires)
+
+        # Saves JWT token in a cookie.
         response.set_cookie(key="access_token", value=token, httponly=True)
         return response
 
+        # Instead of changing this method \/, we will implement the FE logic here ^.
         # validate_user_cookie = await get_login_token(response=response, form_data=form,db=db)
 
     except Exception as ex:
@@ -89,9 +93,10 @@ async def login_page_post(request: Request, db: Session = Depends(get_db)):
         return templates.TemplateResponse("login.html", {"request": request, "msg": msg})
 
 
-async def get_current_user(request: Request):
+async def get_current_user_from_cookie(request: Request):
     """
-    Gets the Token (JWT) verify it against the secret key & jwt algo
+    Gets the Token (JWT) from client cookie,
+    verify it against the secret key & jwt algo,
     decode it, and return 'username' and user_id as 'id'.
     """
     try:
@@ -104,12 +109,11 @@ async def get_current_user(request: Request):
         user_role: str = payload.get("role")
 
         if username is None or user_id is None:
-            print("auth: Could not validate user creds 1")
+            logger.debug("auth_fe: Username or id is not present in payload.")
             return None
         return {"username": username, "user_id": user_id, "user_role": user_role}
     except JWTError as ex:
-        print("auth: Could not validate user creds 2")
-        print(ex)
+        logger.debug("auth_fe: Could not validate user creds")
 
         return None
 
@@ -131,12 +135,19 @@ async def register_page_post(
     db: Session = Depends(get_db),
 ):
     validation1 = db.query(models.Users).filter(models.Users.username == username).first()
-
     validation2 = db.query(models.Users).filter(models.Users.email == email).first()
 
     if password != password2 or validation1 is not None or validation2 is not None:
+        # passwords are not matching
+        # found an entry which uses the 'username' or 'email'.
         msg = "Invalid registeration request"
+        if validation1:
+            msg += " - username is in use"
+        if validation2:
+            msg += " - email is in use"
         return templates.TemplateResponse("register.html", {"request": request, "msg": msg})
+
+    # passwords are matching & 'username', 'email' are not used yet.
 
     user_model = models.Users()
     user_model.username = username
@@ -158,4 +169,5 @@ async def logout_page(request: Request):
     msg = "Logout Successful"
     response = templates.TemplateResponse("login.html", {"request": request, "msg": msg})
     response.delete_cookie(key="access_token")
+    # So, in the next attempt to get the cookie, it will not found.
     return response

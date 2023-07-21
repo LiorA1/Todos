@@ -102,7 +102,8 @@ def create_access_token(username: str, user_id: int, role: str, expires_delta: O
 
 async def get_current_user(token: str = Depends(oauth2_bearer)):
     """
-    Gets the Token (JWT) verify it against the secret key & jwt algo
+    Gets the Token (JWT) from client header, 
+    verify it against the secret key & jwt algo,
     decode it, and return 'username' and user_id as 'id'.
     """
     try:

@@ -11,5 +11,3 @@ The project contains:
 7. Alembic migration tool. 
 3. Each one also has Front-End implementation using Jinja2.
 4. Currently, using 'aiofiles' to serve Static files.
-
-pip install "python-jose[cryptography]" - need to read about it.
